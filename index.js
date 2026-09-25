@@ -1,5 +1,5 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys')
-const P = require('pino')
+import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys'
+import P from 'pino'
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info')
@@ -12,17 +12,12 @@ async function startBot() {
     })
 
     if (!sock.authState.creds.registered) {
-        const phoneNumber = "8801341476952" // তোমার নাম্বার বসানো আছে
+        const phoneNumber = "8801341476952"
         
         setTimeout(async () => {
             try {
                 let code = await sock.requestPairingCode(phoneNumber)
-                console.log(`
-
-  Pairing Code: ${code}
-
-WhatsApp > Linked devices > Link with phone number এ এই কোড বসাও
-                `)
+                console.log(`\n===========================\n Pairing Code: ${code}\n===========================\n`)
             } catch (e) {
                 console.log("Pairing Code Error:", e)
             }
@@ -40,11 +35,5 @@ WhatsApp > Linked devices > Link with phone number এ এই কোড বস�
             console.log('✅ Bot Connected! Paired: true')
         }
     })
-
-    sock.ev.on('messages.upsert', async (m) => {
-        console.log("New message received")
-        // তোমার বাকি কমান্ড এখানে
-    })
 }
-
 startBot()
