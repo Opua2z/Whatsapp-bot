@@ -6,6 +6,7 @@ import cron from 'node-cron';
 const app = express();
 const PORT = process.env.PORT || 10000;
 let sock;
+let isConnecting = false;
 
 const html = `
 <!DOCTYPE html>
@@ -17,7 +18,6 @@ body{background:#0a0a0a;color:white;font-family:sans-serif;display:flex;justify-
 h2{color:#25D366} input{width:90%;padding:13px;border-radius:10px;border:none;margin:15px 0;font-size:16px;text-align:center;background:#2a2a2a;color:white}
 button{width:95%;padding:13px;background:#25D366;border:none;border-radius:10px;font-size:17px;font-weight:bold;cursor:pointer}
 #codeBox{margin-top:20px;font-size:36px;letter-spacing:6px;color:#25D366;font-weight:bold;display:none;background:#000;padding:15px;border-radius:10px}
-#timer{color:#ff4444;margin-top:10px;display:none}
 </style>
 </head>
 <body>
@@ -26,24 +26,24 @@ button{width:95%;padding:13px;background:#25D366;border:none;border-radius:10px;
 <input id="phone" type="text" value="8801341476952">
 <button onclick="getCode()">GET PAIR CODE</button>
 <div id="codeBox"></div>
-<div id="timer">20 সেকেন্ডের ভিতরে বসাও!</div>
 <p id="status" style="font-size:12px;color:#888;margin-top:15px">Ready বস...</p>
 <p style="font-size:11px;color:#666;margin-top:20px">✅ Link Delete | ✅ Welcome | ✅ Kick | ✅ Good Morning</p>
 </div>
 <script>
 async function getCode(){
  let phone=document.getElementById('phone').value;
- document.getElementById('status').innerText="কোড বের হচ্ছে বস...";
+ document.getElementById('status').innerText="কোড বের হচ্ছে বস... ১০ সেকেন্ড লাগবে";
+ try{
  let res=await fetch('/code?number='+phone);
  let data=await res.json();
  if(data.code){
    document.getElementById('codeBox').style.display='block';
    document.getElementById('codeBox').innerText=data.code;
-   document.getElementById('timer').style.display='block';
-   document.getElementById('status').innerText="WhatsApp > Linked Devices > Link with phone number এ বসাও!";
+   document.getElementById('status').innerText="WhatsApp > Linked Devices > Link with phone number এ বসাও! 20s";
  } else {
-   document.getElementById('status').innerText="Error: "+data.error;
+   document.getElementById('status').innerText="Error: "+data.error+" - 5s পর আবার চাপো";
  }
+ } catch(e){ document.getElementById('status').innerText="Server ঘুমাচ্ছে, 20s পর আবার চাপো বস!"; }
 }
 </script>
 </body>
@@ -51,6 +51,9 @@ async function getCode(){
 `;
 
 async function startBot() {
+    if(isConnecting) return;
+    isConnecting = true;
+    try{
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
     sock = makeWASocket({ logger: pino({ level: 'silent' }), auth: state, browser: ["BOS BOT", "Chrome", "1.0.0"] });
     sock.ev.on('creds.update', saveCreds);
@@ -64,20 +67,42 @@ async function startBot() {
             const msg=messages[0]; if(!msg.message||msg.key.fromMe) return; const from=msg.key.remoteJid; if(!from.endsWith('@g.us')) return;
             const body=msg.message.conversation||msg.message.extendedTextMessage?.text||""; const mentions=msg.message.extendedTextMessage?.contextInfo?.mentionedJid||[];
             if(body.includes('http')||body.includes('wa.me')||body.includes('chat.whatsapp.com')){ await sock.sendMessage(from,{delete:msg.key}); await sock.sendMessage(from,{text:`*লিংক ডিলিট!* 🚫 @${msg.key.participant.split('@')[0]}`,mentions:[msg.key.participant]}); }
-            const botNum=sock.user.id.split(':')[0]+'@s.whatsapp.net'; const isMention=mentions.includes(botNum);
+            const botNum=sock.user?.id?.split(':')[0]+'@s.whatsapp.net'; const isMention=mentions.includes(botNum);
             if(isMention && body.toLowerCase().includes('kick')){ let target=mentions.find(j=>j!==botNum); if(target){ await sock.groupParticipantsUpdate(from,[target],"remove"); await sock.sendMessage(from,{text:`*কিক ডান বস!* 👢 @${target.split('@')[0]}`,mentions:[target]}); } }
         }catch{}
     });
 
-    sock.ev.on('connection.update', ({connection,lastDisconnect}) => { if(connection==='close' && lastDisconnect?.error?.output?.statusCode!==DisconnectReason.loggedOut) startBot(); if(connection==='open') console.log('✅ CONNECTED'); });
+    sock.ev.on('connection.update', async ({connection,lastDisconnect}) => {
+        if(connection==='close'){
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode!==DisconnectReason.loggedOut;
+            console.log('Connection closed, reconnecting:', shouldReconnect);
+            isConnecting = false;
+            if(shouldReconnect) setTimeout(startBot, 3000);
+        }
+        if(connection==='open'){ console.log('✅ CONNECTED'); isConnecting = false; }
+    });
+    isConnecting = false;
+    }catch(e){ console.log('Start error', e); isConnecting = false; setTimeout(startBot, 3000); }
 }
 
 app.get('/', (req,res) => res.send(html));
 app.get('/code', async (req,res) => {
-    let number=req.query.number?.replace(/[^0-9]/g,''); try{ let code=await sock.requestPairingCode(number); console.log(`🍫 CODE: ${code}`); res.json({code}); }catch(e){ res.json({error:e.message}); }
+    try{
+        if(!sock){ await startBot(); await new Promise(r=>setTimeout(r,3000)); }
+        let number=req.query.number?.replace(/[^0-9]/g,'');
+        if(!number) return res.json({error:"Number দাও বস"});
+        let code = await sock.requestPairingCode(number);
+        console.log(`🍫 CODE: ${code}`);
+        res.json({code});
+    }catch(e){
+        console.log('Code error:', e.message);
+        isConnecting = false;
+        await startBot();
+        res.json({error: e.message + " - আবার ট্রাই করো বস"});
+    }
 });
 
-cron.schedule('0 7 * * *', async () => { if(!sock) return; try{ const groups=await sock.groupFetchAllParticipating(); for(let id of Object.keys(groups)){ await sock.sendMessage(id,{text:`*Good Morning বসরা!* ☀️🍫\nসকাল ৭টা! নতুন দিন শুরু বস!`}); await new Promise(r=>setTimeout(r,2000)); } }catch{} }, {timezone:"Asia/Dhaka"});
+cron.schedule('0 7 * * *', async () => { if(!sock) return; try{ const groups=await sock.groupFetchAllParticipating(); for(let id of Object.keys(groups)){ await sock.sendMessage(id,{text:`*Good Morning বসরা!* ☀️🍫`}); await new Promise(r=>setTimeout(r,2000)); } }catch{} }, {timezone:"Asia/Dhaka"});
 
 startBot();
 app.listen(PORT, ()=>console.log(`Server on ${PORT}`));
