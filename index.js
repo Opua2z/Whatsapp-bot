@@ -1,9 +1,10 @@
-const express = require('express');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const pino = require('pino');
-const cron = require('node-cron');
+import express from 'express';
+import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
+import pino from 'pino';
+import cron from 'node-cron';
+
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 let sock;
 
 const html = `
@@ -53,9 +54,11 @@ async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
     sock = makeWASocket({ logger: pino({ level: 'silent' }), auth: state, browser: ["BOS BOT", "Chrome", "1.0.0"] });
     sock.ev.on('creds.update', saveCreds);
+
     sock.ev.on('group-participants.update', async (u) => {
         try{ for(let p of u.participants){ if(u.action==='add') await sock.sendMessage(u.id,{text:`*স্বাগতম বস!* 🎉 @${p.split('@')[0]}`,mentions:[p]}); if(u.action==='remove') await sock.sendMessage(u.id,{text:`*আহারে!* 😢 @${p.split('@')[0]} বের হয়ে গেলো!`,mentions:[p]}); } }catch{}
     });
+
     sock.ev.on('messages.upsert', async ({messages}) => {
         try{
             const msg=messages[0]; if(!msg.message||msg.key.fromMe) return; const from=msg.key.remoteJid; if(!from.endsWith('@g.us')) return;
@@ -65,6 +68,7 @@ async function startBot() {
             if(isMention && body.toLowerCase().includes('kick')){ let target=mentions.find(j=>j!==botNum); if(target){ await sock.groupParticipantsUpdate(from,[target],"remove"); await sock.sendMessage(from,{text:`*কিক ডান বস!* 👢 @${target.split('@')[0]}`,mentions:[target]}); } }
         }catch{}
     });
+
     sock.ev.on('connection.update', ({connection,lastDisconnect}) => { if(connection==='close' && lastDisconnect?.error?.output?.statusCode!==DisconnectReason.loggedOut) startBot(); if(connection==='open') console.log('✅ CONNECTED'); });
 }
 
