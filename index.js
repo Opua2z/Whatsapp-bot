@@ -14,25 +14,38 @@ async function startBot() {
         printQRInTerminal: false,
         browser: ["Ubuntu", "Chrome", "22.04.4"]
     })
-    if (!sock.authState.creds.registered) {
-        const phoneNumber = "8801341476952"
-        setTimeout(async () => {
-            try {
-                let code = await sock.requestPairingCode(phoneNumber)
-                console.log(`\n===========================\n Pairing Code: ${code}\n===========================\n`)
-            } catch (e) {
-                console.log("Pairing Code Error:", e)
-            }
-        }, 5000)
-    }
+
     sock.ev.on('creds.update', saveCreds)
+
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect } = update
         if (connection === 'close') {
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode!== DisconnectReason.loggedOut
             if (shouldReconnect) startBot()
         } else if (connection === 'open') {
             console.log('✅ Bot Connected!')
+        }
+    })
+
+    // Auto Reply Feature
+    sock.ev.on('messages.upsert', async (m) => {
+        try {
+            const msg = m.messages[0]
+            if (!msg.message || msg.key.fromMe) return
+
+            const text = msg.message.conversation || msg.message.extendedTextMessage?.text || ""
+            const from = msg.key.remoteJid
+
+            console.log("New Message:", text)
+
+            if (text.toLowerCase() === 'hi' || text.toLowerCase() === 'hello') {
+                await sock.sendMessage(from, { text: 'Hello Boss! 👋 Bot is Working! ✅' })
+            }
+            else if (text.toLowerCase() === 'ping') {
+                await sock.sendMessage(from, { text: 'Pong! 🏓 Bot Active!' })
+            }
+        } catch (e) {
+            console.log(e)
         }
     })
 }
