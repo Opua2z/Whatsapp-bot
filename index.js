@@ -1,8 +1,8 @@
-import express from 'express';
-import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
-import pino from 'pino';
-import qrcode from 'qrcode';
-import fs from 'fs';
+const express = require('express');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const pino = require('pino');
+const qrcode = require('qrcode');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -47,20 +47,20 @@ async function startBos() {
             if (!body) return;
 
             if (['hi','hii','hello','hlw','hey','হাই','হ্যালো'].includes(lower)) {
-                await sock.sendMessage(from, { text: `🍫 *হ্যালো বস! 👋*\n\nআমি *SWEET Family Bot* Active আছি ✅\n\n👉 *.menu* লিখো মেনু দেখতে\n👉 *.ping* লিখে চেক করো\n\nWelcome to SWEET Family! 🍰` });
+                await sock.sendMessage(from, { text: `🍫 *হ্যালো বস! 👋*\n\nআমি *SWEET Family Bot* Active আছি ✅\n\n👉 *.menu* লিখো\n👉 *.ping* চেক করো\n\nWelcome! 🍰` });
                 return;
             }
-            if (lower === '.menu' || lower === 'menu') {
-                await sock.sendMessage(from, { text: `🍰 *SWEET Family BOT* 🍫\n\n*hi / hello* - ওয়েলকাম\n*.menu* - এই মেনু\n*.ping* - Active চেক\n*.antilink on* - Anti-Link ON\n*.antilink off* - Anti-Link OFF\n\nAnti-Link: ${antilinkOn? 'ON ✅' : 'OFF ❌'}` });
+            if (lower === '.menu') {
+                await sock.sendMessage(from, { text: `🍰 *SWEET Family BOT* 🍫\n\n*hi* - ওয়েলকাম\n*.menu* - মেনু\n*.ping* - Active?\n*.antilink on/off*\n\nAnti-Link: ${antilinkOn? 'ON ✅' : 'OFF ❌'}` });
                 return;
             }
-            if (lower === '.ping' || lower === 'ping') {
-                await sock.sendMessage(from, { text: `✅ *PONG!* Bot Active বস! 🍫` });
+            if (lower === '.ping') {
+                await sock.sendMessage(from, { text: `✅ *PONG!* Active বস!` });
                 return;
             }
             if (lower === '.antilink on') {
                 antilinkOn = true;
-                await sock.sendMessage(from, { text: '✅ *Anti-Link ON! Strict Mode!* Admin er tao delete hobe!' });
+                await sock.sendMessage(from, { text: '✅ *Anti-Link ON!* Admin er tao delete hobe!' });
                 return;
             }
             if (lower === '.antilink off') {
@@ -69,14 +69,32 @@ async function startBos() {
                 return;
             }
 
-            // ==== FINAL ANTI-LINK - NO ADMIN CHECK, DIRECT DELETE ====
+            // FINAL ANTI-LINK - DIRECT DELETE, NO ADMIN CHECK
             if (!isGroup ||!antilinkOn) return;
             const hasLink = /(https?:\/\/|www\.|chat\.whatsapp\.com|wa\.me|t\.me|youtube\.com|youtu\.be|facebook\.com|instagram\.com)/i.test(body);
             if (!hasLink) return;
 
-            console.log('LINK FOUND! DIRECT DELETE!');
+            console.log('LINK FOUND! DELETE TRY!');
             try {
                 await sock.sendMessage(from, { delete: msg.key });
                 await new Promise(r => setTimeout(r, 700));
-                await sock.sendMessage(from, {
-                    text: `⚠️ *ANTI-LINK DETECTED!* ⚠️\n\n@${sender.split('@')[0]} লিং
+                await sock.sendMessage(from, { text: `⚠️ *ANTI-LINK!* @${sender.split('@')[0]} লিংক নিষিদ্ধ! 🚫`, mentions: [sender] });
+                console.log('DELETED OK!');
+            } catch (e) {
+                await sock.sendMessage(from, { text: `❌ আমাকে Admin বানাও বস! ডিলিট Fail!` });
+            }
+        } catch (e) { console.log('Error:', e.message); }
+    });
+}
+
+app.get('/', (req, res) => {
+    let html = `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{background:#000;color:#fff;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:sans-serif}.card{background:#111;padding:25px;border-radius:20px;text-align:center;border:2px solid #25D366;max-width:380px;width:90%}img{width:280px;height:280px;background:#fff;padding:10px;border-radius:12px}</style></head><body><div class="card"><h2 style="color:#25D366;">SWEET Family Bot</h2>`;
+    if (isConnected) html += `<h1 style="color:#25D366;">CONNECTED! ✅</h1>`;
+    else if (qrImage && qrImage.startsWith('data:')) html += `<img src="${qrImage}"><p>Scan QR Bos</p>`;
+    else html += `<p>Loading QR... Refresh</p>`;
+    html += `<br><button onclick="location.reload()" style="padding:10px 20px;background:#25D366;border:none;border-radius:8px;font-weight:bold">REFRESH</button></div><script>setTimeout(()=>location.reload(),25000)</script></body></html>`;
+    res.send(html);
+});
+
+startBos();
+app.listen(PORT, () => console.log('Running on ' + PORT));
