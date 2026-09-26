@@ -1,100 +1,89 @@
-const P = require('pino')
-const express = require('express')
-const QRCode = require('qrcode')
-const app = express()
-const PORT = process.env.PORT || 3000
-let lastQR = null
-app.get('/', (req,res)=>{
- if(!lastQR) return res.send('<h1>Bot Starting... 20s por Refresh dao bos!</h1>')
- res.send(`<center><h1>🍫 SWEET FAMILY BOT LIVE 🍫</h1><img src="${lastQR}" width="300"/></center>`)
-})
-app.listen(PORT,()=>console.log('Server running'))
+// plugins/allFeatures.js - FINAL ALL IN ONE
 
-const badWords = ['boka','mc','bc','madarchod','kutta','fuck','bitch','magi','randi','harami','chud']
-const nsfwWords = ['porn','xxx','sex','18+','nudes','onlyfans','xvideo','xnxx']
+module.exports = {
+  name: "allFeatures",
+  async execute(sock, m, args, { isBotAdmin, isSenderAdmin, groupMetadata }) {
+    const chatId = m.chat;
+    if (!global.db.groups[chatId]) global.db.groups[chatId] = {};
+    const cmd = (args[0]||"").toLowerCase();
+    const sub = (args[1]||"").toLowerCase();
 
-async function startBot(){
- const baileys = await import('@whiskeysockets/baileys')
- const makeWASocket = baileys.default
- const {useMultiFileAuthState,DisconnectReason}=baileys
- const {state,saveCreds}=await useMultiFileAuthState('auth_info_baileys')
- const sock=makeWASocket({logger:P({level:'silent'}),auth:state,browser:["SWEET","Chrome","1.0"]})
- sock.ev.on('creds.update',saveCreds)
- sock.ev.on('connection.update',async(u)=>{
-  const {connection,lastDisconnect,qr}=u
-  if(qr) lastQR=await QRCode.toDataURL(qr)
-  if(connection==='open'){lastQR=null;console.log('✅ CONNECTED BOS!')}
-  if(connection==='close'&&lastDisconnect?.error?.output?.statusCode!==DisconnectReason.loggedOut) startBot()
- })
+    if (sub === 'on' || sub === 'off') {
+      let on = sub === 'on';
+      if (['antilink'].includes(cmd)) global.db.groups[chatId].antilink = on;
+      if (['anti18plus','nude'].includes(cmd)) global.db.groups[chatId].anti18 = on;
+      if (['antigali'].includes(cmd)) global.db.groups[chatId].antigali = on;
+      if (cmd === 'welcome') global.db.groups[chatId].welcome = on;
+      if (['goodbye','leave'].includes(cmd)) global.db.groups[chatId].goodbye = on;
+      if (cmd === 'autoreact') global.db.groups[chatId].autoreact = on;
+      return sock.sendMessage(chatId, { text: `${on?'✅':'❌'} ${cmd} ${sub}!` });
+    }
 
- // --- WELCOME / LEAVE - NO ADMIN CHECK - 100% WORKING ---
- sock.ev.on('group-participants.update',async(an)=>{
-  try{
-   const {id, participants, action} = an
-   console.log('EVENT:',action,participants)
-   for(let user of participants){
-     if(action==='add'){
-       await new Promise(r=>setTimeout(r,1200))
-       await sock.sendMessage(id,{text:`🌸 আসসালামু আলাইকুম @${user.split('@')[0]} ভাই! SWEET Family তে স্বাগতম! 💖`,mentions:[user]})
-     }
-     if(action==='remove'){
-       await sock.sendMessage(id,{text:`😔 @${user.split('@')[0]} ভাই চলে গেলো!`,mentions:[user]})
-     }
-   }
-  }catch(e){console.log(e)}
- })
+    if (cmd === 'kick') {
+      if (!isSenderAdmin) return sock.sendMessage(chatId, { text: "❌ শুধু Admin রা কিক করতে পারবে!" });
+      if (!isBotAdmin) return sock.sendMessage(chatId, { text: "❌ বটকে Admin দাও!" });
+      let target = m.mentionedJid?.[0];
+      if (!target) return sock.sendMessage(chatId, { text: "❌ Ex:.kick @user" });
+      await sock.groupParticipantsUpdate(chatId, [target], "remove");
+      return sock.sendMessage(chatId, { text: `✅ @${target.split('@')[0]} কে কিক করা হলো`, mentions:[target] });
+    }
+  },
 
- sock.ev.on('messages.upsert',async({messages})=>{
-  try{
-   const m=messages[0]
-   if(!m.message||m.key.fromMe) return
-   const from=m.key.remoteJid
-   const sender=m.key.participant||from
-   const text=(m.message.conversation||m.message.extendedTextMessage?.text||m.message.imageMessage?.caption||"").trim()
-   const lower=text.toLowerCase()
-   const isGroup=from.endsWith('@g.us')
+  async onGroupParticipantsUpdate(sock, update) {
+    const { id, participants, action } = update;
+    if (!global.db.groups[id]) global.db.groups[id] = {};
+    if (action === 'add' && global.db.groups[id].welcome) {
+      for (let u of participants) {
+        await sock.sendMessage(id, { text: `🌸 Welcome @${u.split('@')[0]} আমাদের গ্রুপে! 🥰\nIntro দেন:\n▫️ নাম:\n▫️ লোকেশন:`, mentions:[u] });
+      }
+    }
+    if (action === 'remove' && global.db.groups[id].goodbye) {
+      for (let u of participants) {
+        await sock.sendMessage(id, { text: `😔 @${u.split('@')[0]} leave নিলো! 👋`, mentions:[u] });
+      }
+    }
+  },
 
-   // Hi Reply
-   if(['hi','hii','hlw','hello','hey','yo'].includes(lower)){
-     await sock.sendMessage(from,{text:`হ্যালো @${sender.split('@')[0]}! 👋 Thanks Hi! Bot LIVE! ✅`,mentions:[sender]})
-     return
-   }
-   if(lower==='.ping'){await sock.sendMessage(from,{text:'🏓 Pong! Bot LIVE! ✅'});return}
-   if(lower==='.live'){await sock.sendMessage(from,{text:'✅ Bot LIVE আছে বস!'});return}
-   if(lower==='.menu'){await sock.sendMessage(from,{text:`*🔥 MENU 🔥*\n👋 Hi Reply\n🌸 Welcome/Leave\n🚫 Link Kick\n🤬 Gali Kick\n🔞 18+ Kick\n.kick @tag`});return}
+  async onMessage(sock, m) {
+    if (!m.isGroup) return;
+    const chatId = m.chat;
+    const body = (m.body||"").toLowerCase().trim();
+    const meta = await sock.groupMetadata(chatId).catch(()=>null);
+    const isSenderAdmin = meta?.participants.find(p=>p.id===m.sender)?.admin;
+    const isBotAdmin = meta?.participants.find(p=>p.id===sock.user.id)?.admin;
+    if (!global.db.groups[chatId]) return;
 
-   //.kick Command - LID FIXED
-   if(lower.startsWith('.kick')){
-     const mentioned = m.message.extendedTextMessage?.contextInfo?.mentionedJid || []
-     if(mentioned.length===0){await sock.sendMessage(from,{text:'❌ @Tag করো বস!'});return}
-     for(let user of mentioned){
-       await sock.groupParticipantsUpdate(from,[user],"remove").catch(e=>console.log(e))
-       await sock.sendMessage(from,{text:`🚫 @${user.split('@')[0]} Kick Done!`,mentions:[user]})
-     }
-     return
-   }
+    // AUTO REACT ✅
+    if (global.db.groups[chatId].autoreact) {
+      const emojis = ["❤️","🔥","😂","🥰","✨"];
+      await sock.sendMessage(chatId, { react: { text: emojis[Math.floor(Math.random()*emojis.length)], key: m.key } }).catch(()=>{});
+    }
 
-   if(!isGroup) return
-   const metadata=await sock.groupMetadata(from).catch(()=>null)
-   if(!metadata) return
-   const senderPart = metadata.participants.find(p=>p.id===sender)
-   const isSenderAdmin =!!senderPart?.admin
-   if(isSenderAdmin) return // Admin ke kick na
+    // HI / HELLO REPLY ✅
+    if (["hi","hello","hlw","hii","hey","salam","assalamu alaikum","oii"].includes(body)) {
+      return sock.sendMessage(chatId, { text: `Hi @${m.sender.split('@')[0]}! কেমন আছো ভাই/আপু? 🥰`, mentions:[m.sender] });
+    }
 
-   // LINK KICK - FORCE
-   if(/(https?:\/\/|www\.|t\.me|telegram|\.com|\.net)/i.test(lower)){
-     await sock.sendMessage(from,{delete:m.key}).catch(()=>{})
-     await new Promise(r=>setTimeout(r,800))
-     await sock.groupParticipantsUpdate(from,[sender],"remove").catch(()=>{})
-     await sock.sendMessage(from,{text:`🚫💥 LINK KICK! @${sender.split('@')[0]}`,mentions:[sender]})
-     return
-   }
-   if(badWords.some(w=>lower.includes(w)) || nsfwWords.some(w=>lower.includes(w))){
-     await sock.sendMessage(from,{delete:m.key}).catch(()=>{})
-     await sock.groupParticipantsUpdate(from,[sender],"remove").catch(()=>{})
-     await sock.sendMessage(from,{text:`🚫 KICK! @${sender.split('@')[0]}`,mentions:[sender]})
-   }
-  }catch(e){console.log(e)}
- })
+    if (isSenderAdmin) return;
+
+    // ANTI-LINK + KICK ✅
+    if (global.db.groups[chatId].antilink && /https?:\/\/|www\.|wa\.me|chat\.whatsapp\.com|t\.me/.test(body)) {
+      if(isBotAdmin) {
+        await sock.sendMessage(chatId, { delete: m.key }).catch(()=>{});
+        await sock.sendMessage(chatId, { text: `❌ @${m.sender.split('@')[0]} লিংক দেওয়ার জন্য কিক!`, mentions:[m.sender] });
+        await sock.groupParticipantsUpdate(chatId, [m.sender], "remove").catch(()=>{});
+      }
+      return;
+    }
+    // ANTI 18+ ✅
+    if (global.db.groups[chatId].anti18 && ["xxx","porn","nude","sex","onlyfans","18+"].some(w=>body.includes(w))) {
+      if(isBotAdmin) await sock.sendMessage(chatId, { delete: m.key }).catch(()=>{});
+      return;
+    }
+    // ANTI GALI ✅
+    if (global.db.groups[chatId].antigali && ["mc","bc","chud","khanki","magi"].some(w=>body.includes(w))) {
+      if(isBotAdmin) await sock.sendMessage(chatId, { delete: m.key }).catch(()=>{});
+      return;
+    }
+  }
 }
-startBot()
