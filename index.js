@@ -46,92 +46,37 @@ async function startBos() {
             const lower = body.toLowerCase();
             if (!body) return;
 
-            console.log(`MSG: ${body} | Group: ${isGroup}`);
-
-            // ==== WELCOME / HI HELLO - EITA TUMI CHAISILA BOS ====
             if (['hi','hii','hello','hlw','hey','হাই','হ্যালো'].includes(lower)) {
-                await sock.sendMessage(from, {
-                    text: `🍫 *হ্যালো বস! 👋*\n\nআমি *SWEET Family Bot* Active আছি ✅\n\n👉 *.menu* লিখো মেনু দেখতে\n👉 *.ping* লিখে চেক করো\n\nWelcome to SWEET Family! 🍰`
-                });
+                await sock.sendMessage(from, { text: `🍫 *হ্যালো বস! 👋*\n\nআমি *SWEET Family Bot* Active আছি ✅\n\n👉 *.menu* লিখো মেনু দেখতে\n👉 *.ping* লিখে চেক করো\n\nWelcome to SWEET Family! 🍰` });
                 return;
             }
-
             if (lower === '.menu' || lower === 'menu') {
-                await sock.sendMessage(from, {
-                    text: `🍰 *SWEET Family BOT* 🍫\n\n*hi / hello* - ওয়েলকাম মেসেজ\n*.menu* - এই মেনু\n*.ping* - বট Active কিনা চেক\n*.antilink on* - Anti-Link চালু (Strict)\n*.antilink off* - Anti-Link বন্ধ\n\n🔗 Anti-Link: ${antilinkOn? 'ON ✅ (Admin er tao delete hobe)' : 'OFF ❌'}\n\nBot by SWEET Family ❤️`
-                });
+                await sock.sendMessage(from, { text: `🍰 *SWEET Family BOT* 🍫\n\n*hi / hello* - ওয়েলকাম\n*.menu* - এই মেনু\n*.ping* - Active চেক\n*.antilink on* - Anti-Link ON\n*.antilink off* - Anti-Link OFF\n\nAnti-Link: ${antilinkOn? 'ON ✅' : 'OFF ❌'}` });
                 return;
             }
-
             if (lower === '.ping' || lower === 'ping') {
-                await sock.sendMessage(from, { text: `✅ *PONG!* Bot Active বস! 🍫\nAnti-Link: ${antilinkOn? 'ON' : 'OFF'}` });
+                await sock.sendMessage(from, { text: `✅ *PONG!* Bot Active বস! 🍫` });
                 return;
             }
-
             if (lower === '.antilink on') {
                 antilinkOn = true;
-                await sock.sendMessage(from, { text: '✅ *Anti-Link ON করলাম বস! (Strict Mode)*\nএখন Admin এর লিংকও ডিলিট হবে! 🚫' });
+                await sock.sendMessage(from, { text: '✅ *Anti-Link ON! Strict Mode!* Admin er tao delete hobe!' });
                 return;
             }
-
             if (lower === '.antilink off') {
                 antilinkOn = false;
-                await sock.sendMessage(from, { text: '❌ Anti-Link OFF করলাম বস!' });
+                await sock.sendMessage(from, { text: '❌ Anti-Link OFF!' });
                 return;
             }
 
-            // ==== STRICT ANTI-LINK - ADMIN ER TAO DELETE ====
+            // ==== FINAL ANTI-LINK - NO ADMIN CHECK, DIRECT DELETE ====
             if (!isGroup ||!antilinkOn) return;
             const hasLink = /(https?:\/\/|www\.|chat\.whatsapp\.com|wa\.me|t\.me|youtube\.com|youtu\.be|facebook\.com|instagram\.com)/i.test(body);
             if (!hasLink) return;
 
-            console.log('LINK FOUND! CHECKING ADMIN...');
-            const groupMeta = await sock.groupMetadata(from);
-            const myNumber = sock.user.id.split(':')[0].split('@')[0];
-
-            let botIsAdmin = false;
-            for (const p of groupMeta.participants) {
-                if (p.id.includes(myNumber)) {
-                    if (p.admin === 'admin' || p.admin === 'superadmin') botIsAdmin = true;
-                    break;
-                }
-            }
-
-            console.log(`Bot: ${myNumber} | IsAdmin: ${botIsAdmin}`);
-
-            if (!botIsAdmin) {
-                await sock.sendMessage(from, { text: '❌ বস আমাকে Admin বানাও! Admin না হলে লিংক ডিলিট করতে পারবো না! 🙏' });
-                return;
-            }
-
-            await sock.sendMessage(from, { delete: msg.key });
-            await new Promise(r => setTimeout(r, 800));
-            await sock.sendMessage(from, {
-                text: `⚠️ *ANTI-LINK DETECTED!* ⚠️\n\n@${sender.split('@')[0]} বস লিংক নিষিদ্ধ! 🚫\n\nএই গ্রুপে লিংক দেওয়া যাবে না!\nআবার দিও না!`,
-                mentions: [sender]
-            });
-            console.log('DELETED SUCCESS!');
-
-        } catch (e) {
-            console.log('Error: ' + e.message);
-        }
-    });
-}
-
-app.get('/', (req, res) => {
-    let html = `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{background:#000;color:#fff;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:sans-serif}.card{background:#111;padding:25px;border-radius:20px;text-align:center;border:2px solid #25D366;max-width:380px;width:90%}img{width:280px;height:280px;background:#fff;padding:10px;border-radius:12px;margin:15px 0}button{padding:10px 20px;background:#25D366;border:none;border-radius:8px;font-weight:bold;cursor:pointer}</style></head><body><div class="card"><h2 style="color:#25D366;">SWEET Family Bot</h2>`;
-    if (isConnected) {
-        html += `<h1 style="color:#25D366;">CONNECTED! ✅</h1><p>Anti-Link: ${antilinkOn? 'ON Strict' : 'OFF'}<br>hi/hello kaj korbe!</p>`;
-    } else {
-        if (qrImage && qrImage.startsWith('data:')) {
-            html += `<img src="${qrImage}"><p>Scan QR Bos</p><button onclick="location.reload()">REFRESH</button>`;
-        } else {
-            html += `<p>Loading QR... 30s wait</p><button onclick="location.reload()">REFRESH</button>`;
-        }
-    }
-    html += `</div><script>setTimeout(()=>location.reload(),25000)</script></body></html>`;
-    res.send(html);
-});
-
-startBos();
-app.listen(PORT, () => console.log('Running on ' + PORT));
+            console.log('LINK FOUND! DIRECT DELETE!');
+            try {
+                await sock.sendMessage(from, { delete: msg.key });
+                await new Promise(r => setTimeout(r, 700));
+                await sock.sendMessage(from, {
+                    text: `⚠️ *ANTI-LINK DETECTED!* ⚠️\n\n@${sender.split('@')[0]} লিং
