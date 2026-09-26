@@ -1,5 +1,4 @@
 const express = require('express');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const qrcode = require('qrcode');
 const fs = require('fs');
@@ -14,6 +13,11 @@ let antilinkOn = true;
 if (!fs.existsSync('auth_info_baileys')) fs.mkdirSync('auth_info_baileys');
 
 async function startBos() {
+    // FIX FOR ERR_REQUIRE_ESM
+    const baileys = await import('@whiskeysockets/baileys');
+    const makeWASocket = baileys.default;
+    const { useMultiFileAuthState, DisconnectReason } = baileys;
+
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
     sock = makeWASocket({
         logger: pino({ level: 'silent' }),
@@ -47,7 +51,7 @@ async function startBos() {
             if (!body) return;
 
             if (['hi','hii','hello','hlw','hey','হাই','হ্যালো'].includes(lower)) {
-                await sock.sendMessage(from, { text: `🍫 *হ্যালো বস! 👋*\n\nআমি *SWEET Family Bot* Active আছি ✅\n\n👉 *.menu* লিখো\n👉 *.ping* চেক করো\n\nWelcome! 🍰` });
+                await sock.sendMessage(from, { text: `🍫 *হ্যালো বস! 👋*\n\nআমি *SWEET Family Bot* Active আছি ✅\n\n👉 *.menu* লিখো\n👉 *.ping* চেক করো` });
                 return;
             }
             if (lower === '.menu') {
@@ -69,7 +73,7 @@ async function startBos() {
                 return;
             }
 
-            // FINAL ANTI-LINK - DIRECT DELETE, NO ADMIN CHECK
+            // FINAL ANTI-LINK - DIRECT DELETE
             if (!isGroup ||!antilinkOn) return;
             const hasLink = /(https?:\/\/|www\.|chat\.whatsapp\.com|wa\.me|t\.me|youtube\.com|youtu\.be|facebook\.com|instagram\.com)/i.test(body);
             if (!hasLink) return;
@@ -79,9 +83,8 @@ async function startBos() {
                 await sock.sendMessage(from, { delete: msg.key });
                 await new Promise(r => setTimeout(r, 700));
                 await sock.sendMessage(from, { text: `⚠️ *ANTI-LINK!* @${sender.split('@')[0]} লিংক নিষিদ্ধ! 🚫`, mentions: [sender] });
-                console.log('DELETED OK!');
             } catch (e) {
-                await sock.sendMessage(from, { text: `❌ আমাকে Admin বানাও বস! ডিলিট Fail!` });
+                await sock.sendMessage(from, { text: `❌ আমাকে Admin বানাও বস!` });
             }
         } catch (e) { console.log('Error:', e.message); }
     });
